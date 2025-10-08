@@ -354,6 +354,14 @@ BuildUI = function()
     canCraftToday = function()
         local playerData = DataController:getData()
         if not playerData then return false end
+        
+        -- Wait for data to be properly loaded
+        if not playerData.jungleForgeCrafts and playerData.jungleForgeCrafts ~= 0 then
+            DataController:waitForData()
+            playerData = DataController:getData()
+            if not playerData then return false end
+        end
+        
         local currentCrafts = playerData.jungleForgeCrafts or 0
         return currentCrafts < 50
     end
@@ -522,7 +530,6 @@ BuildUI = function()
         end
     })
 
-    
     local WorkTimeDropdown = LumberjackHouseSection:Dropdown("SelectWorkTime", {
         Title = "Choose Work Time",
         Values = workTimeOptions,
@@ -538,6 +545,50 @@ BuildUI = function()
             end
         end
     })
+    
+    local getAdjustedLumberjackItems = function()
+        local adjustedItems = {}
+        
+        pcall(function()
+            DataController:waitForData()
+            local playerData = DataController:getData()
+            
+            if playerData and playerData.inventory then
+                for itemIdStr, requestedAmount in pairs(lumberjackItems) do
+                    local itemId = tonumber(itemIdStr)
+                    if itemId then
+                        -- Get the LumberjackItems to find the item name
+                        local LumberjackItems = require(ReplicatedStorage.Shared.List.Lumberjack.Items)
+                        local lumberjackItem = LumberjackItems[itemId]
+                        
+                        if lumberjackItem then
+                            local itemName = lumberjackItem.item:getName()
+                            local playerAmount = 0
+                            
+                            -- Search through all inventory categories for items with matching name
+                            for category, items in pairs(playerData.inventory) do
+                                for inventoryId, itemData in pairs(items) do
+                                    if itemData.nm == itemName then
+                                        playerAmount = itemData.am or 0
+                                        break
+                                    end
+                                end
+                                if playerAmount > 0 then break end
+                            end
+                            
+                            if playerAmount > 0 then
+                                -- Use the minimum of requested amount or what player has
+                                local adjustedAmount = math.min(requestedAmount, playerAmount)
+                                adjustedItems[itemIdStr] = adjustedAmount
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        
+        return adjustedItems
+    end
 
     canAffordUpgrade = function()
         local playerData = DataController:getData()
@@ -603,7 +654,6 @@ BuildUI = function()
                         task.wait(1)
                     end
                 end)
-            else
             end
         end
     })
@@ -611,7 +661,7 @@ BuildUI = function()
     local isAutoLumberjackEnabled = false
     LumberjackHouseSection:Toggle("AutoLumberjack", {
         Title = "Auto Send Lumberjack to Work",
-        Description = "Automatically claims rewards and sends lumberjack back to work with current settings",
+        Description = "Automatically claims rewards and sends lumberjack back to work with current settings (adjusts items to available amounts)",
         Default = false,
         Callback = function(enabled)
             isAutoLumberjackEnabled = enabled
@@ -635,9 +685,10 @@ BuildUI = function()
                                 end
                                 
                                 if workStatus == "idle" or workStatus == "ready_to_claim" then
-                                    
+                                    -- Get adjusted items based on player inventory
+                                    local adjustedLumberjackItems = getAdjustedLumberjackItems()
                                     local sendSuccess, sendResult = pcall(function()
-                                        return LumberjackService:buyLumberjack(selectedMap, selectedWorkTime, lumberjackItems)
+                                        return LumberjackService:buyLumberjack(selectedMap, selectedWorkTime, adjustedLumberjackItems)
                                     end)
                                     
                                     if sendSuccess then
@@ -656,7 +707,6 @@ BuildUI = function()
                         task.wait(10)
                     end
                 end)
-            else
             end
         end
     })
