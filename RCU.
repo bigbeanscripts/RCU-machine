@@ -1,0 +1,823 @@
+local Library = loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/bigbeanscripts/Pet-Warriors/refs/heads/main/test"))()
+local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/SenhorLDS/ProjectLDSHUB/refs/heads/main/Anti%20AFK"))()
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local CollectionService = game:GetService("CollectionService")
+local LocalPlayer = Players.LocalPlayer
+
+local Knit
+local ClickService, EggService, RebirthService, TreeService, AxeService, InventoryService,
+      PetService, RewardService, UpgradeService, SeasonService, AuraService, EventService,
+      OrbService, FarmService, BuildingService, ClanService, LumberjackService
+local DataController, EggController, TreeController, HatchingController, AuraController,
+      MapController, OrbController, ItemController, SoundController, FarmController, BuildingController
+
+local Functions, Util, Values, seasonVariables, seasonUtils, seasonTiersList
+
+local Window, Tabs, EggDropdown, HatchAmount, LuckyEgg, AutoHatch, HideAnimationToggle,
+      SelectTreesDropdown, AutoCutTreesToggle, lowercooldown, BypassStrength, AutoEquip, UpgradeAxe,
+      explorerroom, ActivateLeversSection, ClaimSection, AncientWheel, ClanWheel, AncientMerchantSection, PassSection, Aura, EventSection
+
+local selectedEgg, selectedAmount, useLuckyEggs, selectedTrees, autoBreakRunning, isAutoEquipAxeEnabled,
+      isAutoUpgradeEnabled, originalSelectedObjects, originalAutoCutState, treeToggleThread, petDisplayToId,
+      angelQuestToggle, allowedDiceDropdown, originalEggSelection, originalHatchAmount, originalTreeSelection,
+      originalAutoCutState, originalAutoHatchState, angelQuestEnabled, isAutoCollectEnabled, autoClaimThread, pickupStarsThread,
+      autoClaimAllChestsThread, originalIsInGroup, supplyDropThread, isAutoSpinEnabled, isAutoSpinEnabled1, isAutoBuyEnabled,
+      autoSteampunkToggles, isAutoCraftEnabled, originalAutoCraftSettings, autoCraftDropdown, autoCraftBuildingMap,
+      ResourceStatusParagraph, selectedDiceItems, autoRollThread, isAuraHidden, originalAuraFuncs, isAutoBreakingMeteors
+
+local BuildUI, getUnlockedRebirthOptions, GetBestRebirthOption, updateRebirthDropdown, performRebirth,
+      TerminateThread, CreateThread, formatNumber, getLuckyIdForEggName, getTreeTypes, mapWoodToTreeWorld,
+      getLumberId, getActiveTreesInGroup, updateAxeUpgradeStatus, manageTreeToggleCycle, getAllNonWoodRequirements,
+      getAllFarms, getAllFarmsWithOptions, getAllFarmsForClaim, isFarmReady, getPlayerPetOptions,
+      updatePetStatusParagraph, updateAngelQuestStatus, getAllAuraDice, getCurrentQuestType, findBestPotion,
+      getAvailableAuraDice, setupForQuestType, storeOriginalSettings, restoreOriginalSettings, getAllSmoothies,
+      getAllMagicPotItems, getAllWoods, canCraftToday, getAllMaps, getAllLumberjackItems, canAffordUpgrade,
+      isLumberjackAtWork, getAllUpgradeItems, hasActiveBoost, getUnbuiltBuildings, canAffordBuilding,
+      getPrerequisiteChain, getMissingResources, updateResourceStatus, mapWoodToTreeWorldForCraft, claimChestsInUnlockedMaps,
+      createClaimToggle, getAllAncientMerchantItems, updateDiceStatus, storeAuraFuncs, hideAuraAnims, restoreAuraAnims
+
+spawn(function()
+    while wait(30) do 
+        pcall(function() collectgarbage("collect") end)
+        gcinfo()
+    end
+end)
+
+BuildUI = function()
+
+    local CircusSection = Tabs.Machine:AddSection("Circus Minigame")
+
+    CircusSection:Button({
+        Title = "Instant Complete - Max Luck (1x)",
+        Description = "Instantly completes the circus minigame with maximum luck once",
+        Callback = function() pcall(function() require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false) end) end
+    })
+
+    CircusSection:Toggle("AutoMinigameMaxLuck", {
+    Title = "Auto Minigame (Max Luck)",
+    Description = "Automatically plays circus minigames with max luck until tickets run out",
+    Default = false,
+    Callback = function(Value)
+        local autoEnabled = Value
+        if Value then
+            task.spawn(function()
+                while autoEnabled do
+                    local hasTickets = false
+                    pcall(function()
+                        local playerData = DataController:getData()
+                        if playerData and playerData.inventory and playerData.inventory.exclusive then
+                            for itemId, item in pairs(playerData.inventory.exclusive) do 
+                                if item.nm == "circusTicket" and (item.am or 1) > 0 then 
+                                    hasTickets = true 
+                                    break 
+                                end 
+                            end
+                        end
+                    end)
+                    
+                    if hasTickets then
+                        pcall(function() require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false) end)
+                        task.wait(0.5)
+                    else
+                        task.wait(3)
+                    end
+                end
+            end)
+        else
+            autoEnabled = false
+        end
+    end})
+
+    local SmoothieSection = Tabs.Machine:AddSection("Smoothie Machine")
+
+    getAllSmoothies = function()
+        local options, smoothieMap = {}, {}
+        pcall(function()
+            local Smoothies = require(ReplicatedStorage.Shared.List.Items.Smoothies)
+            
+            for smoothieId, smoothieData in pairs(Smoothies) do
+                if smoothieData.canCraft ~= false then
+                    local displayName = smoothieData.name
+                    table.insert(options, displayName)
+                    smoothieMap[displayName] = smoothieId
+                end
+            end
+        end)
+        table.sort(options)
+        return options, smoothieMap
+    end
+
+    local smoothieOptions, smoothieIdMap = getAllSmoothies()
+    local selectedSmoothie = smoothieOptions[1] and smoothieIdMap[smoothieOptions[1]] or "luckSmoothie"
+
+    local SmoothieDropdown = SmoothieSection:Dropdown("SelectSmoothie", {
+        Title = "Select Smoothie",
+        Description = "Choose which smoothie to craft",
+        Values = smoothieOptions,
+        Multi = false,
+        Searchable = true,
+        Default = smoothieOptions[1] or "Luck Smoothie",
+        Callback = function(value)
+            selectedSmoothie = smoothieIdMap[value] or "luckSmoothie"
+        end
+    })
+
+    local CraftAmountInput = SmoothieSection:Input("CraftAmountInput", {
+        Title = "Craft Amount",
+        Description = "Number of smoothies to craft",
+        Default = "1",
+        Numeric = true,
+        Placeholder = "Enter amount..."
+    })
+
+    SmoothieSection:Button({
+        Title = "Craft (Amount)",
+        Description = "Crafts the selected smoothie for the specified amount",
+        Callback = function()
+            local amount = tonumber(CraftAmountInput.Value) or 1
+            if amount <= 0 then return end
+            
+            task.spawn(function()
+                for i = 1, amount do
+                    pcall(function()
+                        RewardService:craftSmoothie(selectedSmoothie)
+                    end)
+                    
+                    if i < amount then
+                        task.wait(1)
+                    end
+                end
+            end)
+        end
+    })
+
+    local isCraftAllEnabled = false
+
+    SmoothieSection:Toggle("CraftAll", {
+        Title = "Auto Craft Smoothies",
+        Description = "Continuously crafts the selected smoothie until you run out of materials. Use with caution as it consumes many resources!",
+        Default = false,
+        Callback = function(enabled)
+            isCraftAllEnabled = enabled
+            
+            if enabled then
+                task.spawn(function()
+                    while isCraftAllEnabled do
+                        local success = false
+                        pcall(function()
+                            local result = RewardService:craftSmoothie(selectedSmoothie)
+                            if result == "success" then
+                                success = true
+                            end
+                        end)
+                        
+                        if not success then
+                            isCraftAllEnabled = false
+                            break
+                        end
+                        
+                        task.wait(1)
+                    end
+                end)
+            end
+        end
+    })
+
+
+    local MagicPotSection = Tabs.Machine:AddSection("Magic Pot")
+
+    getAllMagicPotItems = function()
+        local options, itemMap = {}, {}
+        pcall(function()
+            local MagicPot = require(ReplicatedStorage.Shared.List.MagicPot)
+            for id, recipe in pairs(MagicPot) do
+                local item = recipe.item
+                local name = item.nm or "Unknown Item"
+                local class = item.cl or "Unknown"
+                local displayName = string.format("%s (%s)", name, class)
+                table.insert(options, displayName)
+                itemMap[displayName] = {id = id, name = name, class = class, recipe = recipe}
+            end
+        end)
+        table.sort(options)
+        return options, itemMap
+    end
+
+    local potOptions, potItemMap = getAllMagicPotItems()
+    local selectedPotItems = {}
+
+    local PotDropdown = MagicPotSection:Dropdown("SelectItems", {Title = "Select Items", Values = potOptions, Multi = true, Searchable = true, Default = {}, Callback = function(value) selectedPotItems = value end})
+
+    local CraftAmountInput = MagicPotSection:Input("CraftAmountInput", {Title = "Craft Amount", Description = "Number of items to craft\n- must have the resources.", Default = "1", Numeric = true, Placeholder = "Enter amount..."})
+
+    MagicPotSection:Button({Title = "Craft (Amount)", Description = "Crafts the selected items for the specified amount", Callback = function()
+        local amount = tonumber(CraftAmountInput.Value) or 1
+        if amount <= 0 then return end
+        
+        task.spawn(function()
+            for displayName, isSelected in pairs(selectedPotItems) do
+                if isSelected and potItemMap[displayName] then
+                    local itemData = potItemMap[displayName]
+                    RewardService:magicPot(itemData.id, amount)
+                    task.wait(1)
+                end
+            end
+        end)
+    end})
+
+    local isAutoCraftEnabled = false
+    MagicPotSection:Toggle("AutoCraft", {Title = "Auto Craft", Description = "Automatically crafts selected items when materials are available", Default = false, Callback = function(enabled)
+        isAutoCraftEnabled = enabled
+        if enabled then
+            task.spawn(function()
+                while isAutoCraftEnabled do
+                    if next(selectedPotItems) then
+                        pcall(function()
+                            DataController:waitForData()
+                            local playerData = DataController:getData()
+                            
+                            for displayName, isSelected in pairs(selectedPotItems) do
+                                if isSelected and potItemMap[displayName] then
+                                    local itemData = potItemMap[displayName]
+                                    local recipe = itemData.recipe
+                                    
+                                    if recipe.requiredMastery and playerData.mastery and playerData.mastery < recipe.requiredMastery then
+                                        continue
+                                    end
+                                    
+                                    local maxCraftable = math.huge
+                                    if recipe.required then
+                                        for _, req in pairs(recipe.required) do
+                                            local item = Util.itemUtils.getItemFromName(playerData, req.nm)
+                                            local currentAmount = item and item:getAmount() or 0
+                                            local requiredAmount = req.am or 1
+                                            local canMakeFromThis = math.floor(currentAmount / requiredAmount)
+                                            maxCraftable = math.min(maxCraftable, canMakeFromThis)
+                                        end
+                                    end
+                                    
+                                    if maxCraftable <= 0 or maxCraftable == math.huge then
+                                        continue
+                                    end
+                                    
+                                    RewardService:magicPot(itemData.id, maxCraftable)
+                                    task.wait(1)
+                                end
+                            end
+                        end)
+                    end
+                    task.wait(5)
+                end
+            end)
+        end
+    end})
+
+
+    local JungleForgeSection = Tabs.Machine:AddSection("Jungle Forge")
+
+    getAllWoods = function()
+        local options, woodMap = {}, {}
+        local woodsMap = {}
+        
+        pcall(function()
+            DataController:waitForData()
+            local playerData = DataController:getData()
+            local Trees = require(ReplicatedStorage.Shared.List.Trees)
+            
+            if playerData and playerData.inventory and playerData.inventory.mapItem then
+                for itemId, itemData in pairs(playerData.inventory.mapItem) do
+                    local item = Util.itemUtils.createItemFromData(itemData)
+                    if item and item.usableInJungleForge and item:usableInJungleForge() then
+                        local woodName = item:getName() or "Unknown Wood"
+                        local amount = item:getAmount() or 0
+                        
+                        if amount > 0 then
+                            local zones = {}
+                            
+                            for zoneName, zoneData in pairs(Trees) do
+                                if zoneData.trees and #zoneData.trees > 0 then
+                                    local treeInfo = zoneData.trees[1]
+                                    if treeInfo and treeInfo.item then
+                                        local treeItem = treeInfo.item
+                                        local treeWoodId = treeItem.id or treeItem.Name or treeItem.name or 
+                                            (typeof(treeItem.getId) == "function" and treeItem:getId()) or 
+                                            (typeof(treeItem.getName) == "function" and treeItem:getName())
+                                        
+                                        if treeWoodId and treeWoodId:lower() == woodName:lower() then
+                                            table.insert(zones, zoneName:sub(1,1):upper() .. zoneName:sub(2))
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            if #zones == 0 then
+                                table.insert(zones, "Unknown")
+                            end
+                            
+                            local zonesText = table.concat(zones, "/")
+                            local displayName = string.format("%s (%s)", woodName, zonesText)
+                            
+                            table.insert(options, displayName)
+                            woodMap[displayName] = itemId
+                        end
+                    end
+                end
+            end
+        end)
+        
+        table.sort(options)
+        return options, woodMap
+    end
+
+    local woodOptions, woodIdMap = getAllWoods()
+    local selectedWood = nil
+
+    local WoodDropdown = JungleForgeSection:Dropdown("SelectWood", {
+        Title = "Select Wood",
+        Description = "Choose which wood to forge (requires 200+)",
+        Values = woodOptions,
+        Multi = false,
+        Searchable = true,
+        Default = woodOptions[1] or nil,
+        Callback = function(value)
+            selectedWood = woodIdMap[value]
+            if selectedWood then
+            end
+        end
+    })
+
+    canCraftToday = function()
+        local playerData = DataController:getData()
+        if not playerData then return false end
+        local currentCrafts = playerData.jungleForgeCrafts or 0
+        return currentCrafts < 50
+    end
+
+    local isAutoForgeEnabled = false
+    JungleForgeSection:Toggle("AutoForge", {
+        Title = "Auto Forge",
+        Description = "Automatically forges the selected wood when available (50 crafts per day limit)",
+        Default = false,
+        Callback = function(enabled)
+            isAutoForgeEnabled = enabled
+            if enabled then
+                task.spawn(function()
+                    local lastDailyCheck = 0
+                    local canCraftDaily = true
+                    
+                    while isAutoForgeEnabled do
+                        if tick() - lastDailyCheck >= 5 then
+                            canCraftDaily = canCraftToday()
+                            lastDailyCheck = tick()
+                        end
+                        
+                        if selectedWood and canCraftDaily then
+                            pcall(function()
+                                DataController:waitForData()
+                                local playerData = DataController:getData()
+                                
+                                if playerData.inventory and playerData.inventory.mapItem and playerData.inventory.mapItem[selectedWood] then
+                                    local itemData = playerData.inventory.mapItem[selectedWood]
+                                    local item = Util.itemUtils.createItemFromData(itemData)
+                                    
+                                    if item and item:getAmount() >= 200 then
+                                        local woodName = item:getName()
+                                        RewardService:jungleForge(selectedWood)
+                                    end
+                                end
+                            end)
+                        end
+                        task.wait(0.25)
+                    end
+                end)
+            end
+        end
+    })
+
+    local LumberjackHouseSection = Tabs.Machine:AddSection("Lumberjack House")
+
+    getAllMaps = function()
+        local options, mapMap = {}, {}
+        pcall(function()
+            local Maps = require(ReplicatedStorage.Shared.List.Maps)
+            for mapId, mapData in pairs(Maps) do
+                if mapData.lumberjack then
+                    local displayName = mapData.name
+                    table.insert(options, displayName)
+                    mapMap[displayName] = mapId
+                end
+            end
+        end)
+        table.sort(options)
+        return options, mapMap
+    end
+
+    getAllLumberjackItems = function()
+        local options, itemMap = {}, {}
+        pcall(function()
+            local LumberjackItems = require(ReplicatedStorage.Shared.List.Lumberjack.Items)
+            for itemId, itemData in pairs(LumberjackItems) do
+                local itemName = itemData.item:getName()
+                for amount = 1, itemData.max do
+                    local displayName = string.format("%s %dx", itemName, amount)
+                    table.insert(options, displayName)
+                    itemMap[displayName] = {itemId = itemId, amount = amount, baseItem = itemName}
+                end
+            end
+        end)
+        
+        table.sort(options, function(a, b)
+            local aItem, aAmount = a:match("^(.+) (%d+)x$")
+            local bItem, bAmount = b:match("^(.+) (%d+)x$")
+            
+            if aItem == bItem then
+                return tonumber(aAmount) < tonumber(bAmount)
+            else
+                return aItem < bItem
+            end
+        end)
+        
+        return options, itemMap
+    end
+
+    local mapOptions, mapIdMap = getAllMaps()
+    local itemOptions, itemIdMap = getAllLumberjackItems()
+    local workTimeOptions = {"1 Hour", "3 Hours", "6 Hours"}
+
+    selectedMap = nil
+    selectedItems = {}
+    local selectedWorkTime = 1
+    local lumberjackItems = {}
+
+    local MapDropdown = LumberjackHouseSection:Dropdown("SelectMap", {
+        Title = "Select Map",
+        Values = mapOptions,
+        Multi = false,
+        Searchable = true,
+        Default = mapOptions[1] or nil,
+        Callback = function(value)
+            selectedMap = mapIdMap[value]
+        end
+    })
+
+    local ItemsDropdown
+    local isInternallyUpdating = false
+
+    ItemsDropdown = LumberjackHouseSection:Dropdown("SelectItems", {
+        Title = "Select Additional Items",
+        Values = itemOptions,
+        Multi = true,
+        Searchable = true,
+        Default = {},
+        Callback = function(value)
+            if isInternallyUpdating then return end
+
+            local highestSelectionsByBaseItem = {}
+
+            for displayName, isSelected in pairs(value) do
+                if isSelected then
+                    local itemInfo = itemIdMap[displayName]
+                    if itemInfo then
+                        local baseItem = itemInfo.baseItem
+                        if not highestSelectionsByBaseItem[baseItem] or itemInfo.amount > highestSelectionsByBaseItem[baseItem].amount then
+                            highestSelectionsByBaseItem[baseItem] = itemInfo
+                        end
+                    end
+                end
+            end
+
+            local correctedSelections = {}
+            for _, itemInfo in pairs(highestSelectionsByBaseItem) do
+                local displayName = string.format("%s %dx", itemInfo.baseItem, itemInfo.amount)
+                correctedSelections[displayName] = true
+            end
+
+            local originalCount = 0
+            for _, isSelected in pairs(value) do
+                if isSelected then originalCount = originalCount + 1 end
+            end
+            if #correctedSelections ~= originalCount then
+                isInternallyUpdating = true
+                task.spawn(function()
+                    if ItemsDropdown and ItemsDropdown.SetValue then
+                        ItemsDropdown:SetValue(correctedSelections)
+                    end
+                    task.wait()
+                    isInternallyUpdating = false
+                end)
+            end
+
+            selectedItems = {}
+            lumberjackItems = {}
+            for _, itemInfo in pairs(highestSelectionsByBaseItem) do
+                local displayName = string.format("%s %dx", itemInfo.baseItem, itemInfo.amount)
+                selectedItems[displayName] = itemInfo
+                lumberjackItems[tostring(itemInfo.itemId)] = itemInfo.amount
+            end
+        end
+    })
+
+    
+    local WorkTimeDropdown = LumberjackHouseSection:Dropdown("SelectWorkTime", {
+        Title = "Choose Work Time",
+        Values = workTimeOptions,
+        Multi = false,
+        Default = "1 Hour",
+        Callback = function(value)
+            if value == "1 Hour" then
+                selectedWorkTime = 1
+            elseif value == "3 Hours" then
+                selectedWorkTime = 2
+            elseif value == "6 Hours" then
+                selectedWorkTime = 3
+            end
+        end
+    })
+
+    canAffordUpgrade = function()
+        local playerData = DataController:getData()
+        if not playerData then return false end
+        
+        local LumberjackUpgrades = require(ReplicatedStorage.Shared.List.Lumberjack.Upgrades)
+        local currentLevel = playerData.lumberjackUpgrades or 0
+        local nextUpgrade = LumberjackUpgrades[currentLevel + 1]
+        
+        if not nextUpgrade then return false end
+        
+        local playerGems = playerData.gems or 0
+        return playerGems >= nextUpgrade.price
+    end
+
+    isLumberjackAtWork = function()
+        local playerData = DataController:getData()
+        if not playerData then return false end
+        
+        local lumberjackRewards = playerData.lumberjackRewards or {}
+        local lumberjackFinished = playerData.lumberjackFinished or 0
+        local serverTimeNow = Knit.serverTimeNow or os.time()
+        
+        if #lumberjackRewards > 0 and serverTimeNow >= lumberjackFinished then
+            return "ready_to_claim"
+        end
+        
+        if serverTimeNow < lumberjackFinished then
+            return "working"
+        end
+        
+        return "idle"
+    end
+
+    isAutoUpgradeEnabled = false
+    LumberjackHouseSection:Toggle("AutoUpgrade", {
+        Title = "Auto Upgrade",
+        Description = "Automatically upgrades lumberjack when you can afford it",
+        Default = false,
+        Callback = function(enabled)
+            isAutoUpgradeEnabled = enabled
+            if enabled then
+                task.spawn(function()
+                    local lastAffordCheck = 0
+                    local canAfford = false
+                    
+                    while isAutoUpgradeEnabled do
+                        if tick() - lastAffordCheck >= 5 then
+                            canAfford = canAffordUpgrade()
+                            lastAffordCheck = tick()
+                        end
+                        
+                        if canAfford then
+                            local success, result = pcall(function()
+                                return LumberjackService:upgrade()
+                            end)
+                            
+                            if success then
+                            else
+                            end
+                        end
+                        
+                        task.wait(1)
+                    end
+                end)
+            else
+            end
+        end
+    })
+
+    local isAutoLumberjackEnabled = false
+    LumberjackHouseSection:Toggle("AutoLumberjack", {
+        Title = "Auto Send Lumberjack to Work",
+        Description = "Automatically claims rewards and sends lumberjack back to work with current settings",
+        Default = false,
+        Callback = function(enabled)
+            isAutoLumberjackEnabled = enabled
+            if enabled then                
+                task.spawn(function()
+                    while isAutoLumberjackEnabled do
+                        if selectedMap then
+                            local success, error = pcall(function()
+                                local workStatus = isLumberjackAtWork()
+                                
+                                if workStatus == "ready_to_claim" then
+                                    local claimSuccess, claimResult = pcall(function()
+                                        return LumberjackService:claim()
+                                    end)
+                                    
+                                    if claimSuccess then
+                                    else
+                                    end
+                                    
+                                    task.wait(2) 
+                                end
+                                
+                                if workStatus == "idle" or workStatus == "ready_to_claim" then
+                                    
+                                    local sendSuccess, sendResult = pcall(function()
+                                        return LumberjackService:buyLumberjack(selectedMap, selectedWorkTime, lumberjackItems)
+                                    end)
+                                    
+                                    if sendSuccess then
+                                    else
+                                    end
+                                    
+                                    task.wait(2)
+                                end
+                            end)
+                            
+                            if not success then
+                            end
+                        else
+                        end
+                        
+                        task.wait(10)
+                    end
+                end)
+            else
+            end
+        end
+    })
+    
+    local SteampunkMachineSection = Tabs.Machine:AddSection("Steampunk Machine")
+
+    local SteampunkUpgrades = require(ReplicatedStorage.Shared.List.SteampunkMachine)
+
+    getAllUpgradeItems = function(upgradeId, upgradeData)
+        local options, itemMap = {}, {}
+        
+        if upgradeData.items then
+            for i, item in ipairs(upgradeData.items) do
+                local name = item.nm or "Unknown Item"
+                local amount = item.am or 1
+                local displayName = string.format("%s (%dx)", name, amount)
+                table.insert(options, displayName)
+                itemMap[displayName] = {index = i, name = name, amount = amount}
+            end
+        end
+        
+        return options, itemMap
+    end
+
+    hasActiveBoost = function(boostName)
+        local playerData = DataController:getData()
+        if not playerData or not playerData.activeBoosts then return false end
+        
+        for activeBoostName, timeLeft in pairs(playerData.activeBoosts) do
+            if activeBoostName == boostName .. "Steampunk" and timeLeft > 0 then
+                return true
+            end
+        end
+        return false
+    end
+
+    autoSteampunkToggles = {}
+
+    for upgradeId, upgradeData in pairs(SteampunkUpgrades) do
+        local upgradeOptions, upgradeItemMap = getAllUpgradeItems(upgradeId, upgradeData)
+        local selectedItems = {}
+        
+        local itemDropdown = SteampunkMachineSection:Dropdown("Select" .. upgradeId, {
+            Title = "Select Items - " .. (upgradeData.title or upgradeId),
+            Values = upgradeOptions,
+            Multi = true,
+            Searchable = true,
+            Default = {},
+            Callback = function(value) selectedItems = value end
+        })
+        
+        local isAutoEnabled = false
+        SteampunkMachineSection:Toggle("Auto" .. upgradeId, {
+            Title = "Auto " .. (upgradeData.title or upgradeId),
+            Description = "Automatically uses selected items when boost is not active",
+            Default = false,
+            Callback = function(enabled)
+                isAutoEnabled = enabled
+                autoSteampunkToggles[upgradeId] = enabled
+                
+                if enabled then
+                    task.spawn(function()
+                        while isAutoEnabled do
+                            if not hasActiveBoost(upgradeId) and next(selectedItems) then
+                                pcall(function()
+                                    DataController:waitForData()
+                                    local playerData = DataController:getData()
+                                    
+                                    local availableItems = {}
+                                    for displayName, isSelected in pairs(selectedItems) do
+                                        if isSelected and upgradeItemMap[displayName] then
+                                            local itemInfo = upgradeItemMap[displayName]
+                                            local item = Util.itemUtils.getItemFromName(playerData, itemInfo.name)
+                                            if item and item:getAmount() >= itemInfo.amount then
+                                                table.insert(availableItems, {
+                                                    index = itemInfo.index,
+                                                    name = itemInfo.name
+                                                })
+                                            end
+                                        end
+                                    end
+                                    
+                                    if #availableItems > 0 then
+                                        local randomItem = availableItems[math.random(1, #availableItems)]
+                                        RewardService:steampunkMachine(upgradeId, randomItem.index)
+                                        task.wait(2)
+                                    end
+                                end)
+                            end
+                            task.wait(5)
+                        end
+                    end)
+                end
+            end
+        })
+    end
+
+    SaveManager:SetLibrary(Library)
+    InterfaceManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings()
+    SaveManager:SetIgnoreIndexes{}
+    InterfaceManager:SetFolder("FluentScriptHub")
+    SaveManager:SetFolder("FluentScriptHub/specific-game")
+end
+
+task.spawn(function()
+    if not game:IsLoaded() then game.Loaded:Wait() end
+
+    Knit = require(ReplicatedStorage.Packages.Knit)
+    Knit.OnStart():await()
+
+    ClickService = Knit.GetService("ClickService")
+    EggService = Knit.GetService("EggService")
+    RebirthService = Knit.GetService("RebirthService")
+    TreeService = Knit.GetService("TreeService")
+    AxeService = Knit.GetService("AxeService")
+    InventoryService = Knit.GetService("InventoryService")
+    PetService = Knit.GetService("PetService")
+    RewardService = Knit.GetService("RewardService")
+    ClanService = Knit.GetService("ClanService")
+    UpgradeService = Knit.GetService("UpgradeService")
+    SeasonService = Knit.GetService("SeasonService")
+    FarmService = Knit.GetService("FarmService")
+    AuraService = Knit.GetService("AuraService")
+    EventService = Knit.GetService("EventService")
+    OrbService = Knit.GetService("OrbService")
+    BuildingService = Knit.GetService("BuildingService")
+    LumberjackService = Knit.GetService("LumberjackService")
+    
+    DataController = Knit.GetController("DataController")
+    EggController = Knit.GetController("EggController")
+    TreeController = Knit.GetController("TreeController")
+    AuraController = Knit.GetController("AuraController")
+    MapController = Knit.GetController("MapController")
+    OrbController = Knit.GetController("OrbController")
+    ItemController = Knit.GetController("ItemController")
+    SoundController = Knit.GetController("SoundController")
+    FarmController = Knit.GetController("FarmController")
+    BuildingController = Knit.GetController("BuildingController")
+    HatchingController = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("Client"):WaitForChild("Controllers"):WaitForChild("HatchingController"))
+    
+    Functions = require(ReplicatedStorage.Shared.Functions)
+    seasonVariables = require(ReplicatedStorage.Shared.Variables)
+    seasonUtils = require(ReplicatedStorage.Shared.Util)
+    seasonTiersList = require(ReplicatedStorage.Shared.List[("Season%*"):format(seasonVariables.season)].Tiers)
+    Util = require(ReplicatedStorage.Shared.Util)
+    Values = require(ReplicatedStorage.Shared.Values)   
+
+    Window = Library:Window{
+        Title = "RCU",
+        SubTitle = "By Duckie",
+        TabWidth = 160,
+        Size =  UDim2.fromOffset(580, 460),
+        Resize = false,
+        Theme = "Darker",
+        MinimizeKey = Enum.KeyCode.LeftShift
+    }
+
+    Tabs = {
+        Machine = Window:AddTab({ Title = "Machines/Minigames", Icon = "phosphor-game-controller-bold" }),
+    }
+
+    BuildUI()
+end)
