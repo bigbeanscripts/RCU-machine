@@ -407,6 +407,31 @@ BuildUI = function()
         end
     })
 
+    JungleForgeSection:Button({
+        Title = "Check Daily Usage",
+        Description = "Shows how many Jungle Forge crafts you've used today",
+        Callback = function()
+            pcall(function()
+                DataController:waitForData()
+                local playerData = DataController:getData()
+                
+                if playerData then
+                    local jungleForgeCrafts = playerData.jungleForgeCrafts or 0
+                    local remaining = math.max(0, 50 - jungleForgeCrafts)
+                                        
+                    -- You could also create a notification here if you have that setup
+                    Library:Notify({
+                        Title = "Jungle Forge Status",
+                        Content = string.format("Used: %d/50 | Remaining: %d", jungleForgeCrafts, remaining),
+                        Duration = 3
+                    })
+                else
+                    print("Could not get player data")
+                end
+            end)
+        end
+    })
+
     local LumberjackHouseSection = Tabs.Machine:AddSection("Lumberjack House")
 
     getAllMaps = function()
@@ -565,7 +590,7 @@ BuildUI = function()
                             local itemName = lumberjackItem.item:getName()
                             local playerAmount = 0
                             
-                            -- Search through all inventory categories for items with matching name
+                            -- Search through andinventory categories for items with matching name
                             for category, items in pairs(playerData.inventory) do
                                 for inventoryId, itemData in pairs(items) do
                                     if itemData.nm == itemName then
