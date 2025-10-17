@@ -58,40 +58,69 @@ BuildUI = function()
         Callback = function() pcall(function() require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false) end) end
     })
 
+    -- shared flag and task handle
+    local autoMinigameMaxLuckEnabled = false
+    local autoMinigameTask = nil
+
     CircusSection:Toggle("AutoMinigameMaxLuck", {
-    Title = "Auto Minigame (Max Luck)",
-    Description = "Automatically plays circus minigames with max luck until tickets run out",
-    Default = false,
-    Callback = function(Value)
-        local autoEnabled = Value
-        if Value then
-            task.spawn(function()
-                while autoEnabled do
-                    local hasTickets = false
-                    pcall(function()
-                        local playerData = DataController:getData()
-                        if playerData and playerData.inventory and playerData.inventory.exclusive then
-                            for itemId, item in pairs(playerData.inventory.exclusive) do 
-                                if item.nm == "circusTicket" and (item.am or 1) > 0 then 
-                                    hasTickets = true 
-                                    break 
-                                end 
+        Title = "Auto Minigame (Max Luck)",
+        Description = "Automatically plays circus minigames with max luck until tickets run out",
+        Default = false,
+        Callback = function(Value)
+            autoMinigameMaxLuckEnabled = Value
+
+            -- If we're turning it on, start the loop (but don't start multiple loops)
+            if Value then
+                if autoMinigameTask then return end -- already running
+
+                autoMinigameTask = task.spawn(function()
+                    while autoMinigameMaxLuckEnabled do
+                        local hasTickets = false
+
+                        -- safe read player data
+                        pcall(function()
+                            local playerData = DataController:getData()
+                            if playerData and playerData.inventory and playerData.inventory.exclusive then
+                                for itemId, item in pairs(playerData.inventory.exclusive) do
+                                    if item.nm == "circusTicket" and (item.am or 1) > 0 then
+                                        hasTickets = true
+                                        break
+                                    end
+                                end
+                            end
+                        end)
+
+                        -- If the toggle was switched off while we were checking, exit immediately
+                        if not autoMinigameMaxLuckEnabled then break end
+
+                        if hasTickets then
+                            pcall(function()
+                                require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false)
+                            end)
+                            -- wait 0.5 but in small slices so we can stop instantly
+                            for i = 1, 5 do
+                                if not autoMinigameMaxLuckEnabled then break end
+                                task.wait(0.1)
+                            end
+                        else
+                            -- no tickets: wait 3s in short slices so it can stop instantly
+                            for i = 1, 30 do
+                                if not autoMinigameMaxLuckEnabled then break end
+                                task.wait(0.1)
                             end
                         end
-                    end)
-                    
-                    if hasTickets then
-                        pcall(function() require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false) end)
-                        task.wait(0.5)
-                    else
-                        task.wait(3)
                     end
-                end
-            end)
-        else
-            autoEnabled = false
+
+                    -- cleanup handle so we can start again later
+                    autoMinigameTask = nil
+                end)
+            else
+                -- turning off: set flag to false (loop will observe it and exit ASAP)
+                autoMinigameMaxLuckEnabled = false
+            end
         end
-    end})
+    })
+
 
     local SmoothieSection = Tabs.Machine:AddSection("Smoothie Machine")
 
