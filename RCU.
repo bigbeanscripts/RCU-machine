@@ -74,6 +74,9 @@ BuildUI = function()
                 if autoMinigameTask then return end -- already running
 
                 autoMinigameTask = task.spawn(function()
+                    local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit)
+                    local RewardService = Knit.GetService("RewardService")
+
                     while autoMinigameMaxLuckEnabled do
                         local hasTickets = false
 
@@ -90,20 +93,17 @@ BuildUI = function()
                             end
                         end)
 
-                        -- If the toggle was switched off while we were checking, exit immediately
+                        -- exit immediately if toggle turned off
                         if not autoMinigameMaxLuckEnabled then break end
 
                         if hasTickets then
+                            -- run the remote every 0.25s as long as tickets exist
                             pcall(function()
-                                require(ReplicatedStorage.Packages.Knit).GetService("RewardService"):playCircusMinigame(10, false)
+                                RewardService:playCircusMinigame(10, false)
                             end)
-                            -- wait 0.5 but in small slices so we can stop instantly
-                            for i = 1, 5 do
-                                if not autoMinigameMaxLuckEnabled then break end
-                                task.wait(0.1)
-                            end
+                            task.wait(0.1)
                         else
-                            -- no tickets: wait 3s in short slices so it can stop instantly
+                            -- no tickets: wait 3s in short slices (0.1s) so toggle can stop instantly
                             for i = 1, 30 do
                                 if not autoMinigameMaxLuckEnabled then break end
                                 task.wait(0.1)
@@ -115,12 +115,11 @@ BuildUI = function()
                     autoMinigameTask = nil
                 end)
             else
-                -- turning off: set flag to false (loop will observe it and exit ASAP)
+                -- turning off: loop will observe this and exit
                 autoMinigameMaxLuckEnabled = false
             end
         end
     })
-
 
     local SmoothieSection = Tabs.Machine:AddSection("Smoothie Machine")
 
