@@ -392,48 +392,73 @@ BuildUI = function()
         end
     })
 
-    canCraftToday = function()
+
+    local function canCraftToday()
         local playerData = DataController:getData()
         if not playerData then return false end
-        
-        -- Wait for data to be properly loaded
+
+        -- Ensure data is loaded
         if not playerData.jungleForgeCrafts and playerData.jungleForgeCrafts ~= 0 then
             DataController:waitForData()
             playerData = DataController:getData()
             if not playerData then return false end
         end
-        
+
         local currentCrafts = playerData.jungleForgeCrafts or 0
         return currentCrafts < 50
     end
 
     local isAutoForgeEnabled = false
+    local autoForgeTask = nil
+
     JungleForgeSection:Toggle("AutoForge", {
         Title = "Auto Forge",
         Description = "Automatically forges the selected wood when available (50 crafts per day limit)",
         Default = false,
         Callback = function(enabled)
             isAutoForgeEnabled = enabled
+
             if enabled then
-                task.spawn(function()
+                if autoForgeTask then return end -- prevent duplicate loops
+
+                autoForgeTask = task.spawn(function()
                     local lastDailyCheck = 0
                     local canCraftDaily = true
-                    
+
+                    -- 🪓 Immediately attempt one craft when turned on
+                    pcall(function()
+                        if selectedWood then
+                            DataController:waitForData()
+                            local playerData = DataController:getData()
+
+                            if playerData.inventory and playerData.inventory.mapItem and playerData.inventory.mapItem[selectedWood] then
+                                local itemData = playerData.inventory.mapItem[selectedWood]
+                                local item = Util.itemUtils.createItemFromData(itemData)
+
+                                if item and item:getAmount() >= 200 then
+                                    local woodName = item:getName()
+                                    RewardService:jungleForge(selectedWood)
+                                end
+                            end
+                        end
+                    end)
+
+                    -- 🌀 Continue the automatic forging loop
                     while isAutoForgeEnabled do
                         if tick() - lastDailyCheck >= 5 then
                             canCraftDaily = canCraftToday()
                             lastDailyCheck = tick()
                         end
-                        
+
                         if selectedWood and canCraftDaily then
                             pcall(function()
                                 DataController:waitForData()
                                 local playerData = DataController:getData()
-                                
+
                                 if playerData.inventory and playerData.inventory.mapItem and playerData.inventory.mapItem[selectedWood] then
                                     local itemData = playerData.inventory.mapItem[selectedWood]
                                     local item = Util.itemUtils.createItemFromData(itemData)
-                                    
+
                                     if item and item:getAmount() >= 200 then
                                         local woodName = item:getName()
                                         RewardService:jungleForge(selectedWood)
@@ -441,9 +466,14 @@ BuildUI = function()
                                 end
                             end)
                         end
+
                         task.wait(0.25)
                     end
+
+                    autoForgeTask = nil
                 end)
+            else
+                isAutoForgeEnabled = false
             end
         end
     })
