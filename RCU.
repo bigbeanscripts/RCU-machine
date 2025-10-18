@@ -1317,6 +1317,68 @@ BuildUI = function()
         end
     })
 
+   local FallingStarsEvent = Tabs.Machine:AddSection("Falling Stars Event")
+
+    local Util = require(ReplicatedStorage.Shared.Functions)
+
+    local FALLING_STARS_COOLDOWN = 79200 -- 22 hours
+    local autoFallingStarsEnabled = false
+    local autoFallingStarsThread = nil
+
+    FallingStarsEvent:Toggle("AutoActiveStarsEvent", {
+        Title = "Auto Active Stars Event",
+        Description = "Activates the falling star event when it's available.",
+        Default = false,
+        Callback = function(enabled)
+            autoFallingStarsEnabled = enabled
+
+            if enabled then
+                if autoFallingStarsThread then return end
+                autoFallingStarsThread = task.spawn(function()
+                    while autoFallingStarsEnabled do
+                        -- Wait for player data
+                        pcall(function() DataController:waitForData() end)
+                        local ok, data = pcall(function() return DataController and DataController:getData() end)
+
+                        if not ok or not data then
+                            task.wait(5)
+                            continue
+                        end
+
+                        -- Calculate cooldown
+                        local last = data.lastSpawnedFallingStarsEvent or 0
+                        local remaining = FALLING_STARS_COOLDOWN + last - os.time()
+
+                        if remaining <= 0 then
+                            pcall(function()
+                                local fsService = Knit.GetService("FallingStarsService")
+                                if fsService and fsService.activateFallingStarsEvent then
+                                    local result = fsService:activateFallingStarsEvent()
+                                else
+                                end
+                            end)
+                            task.wait(5) -- small delay to allow data to update
+                        else
+                            local human = Util and Util.formatTime2 and Util.formatTime2(remaining) or tostring(remaining)
+                            task.wait(5) -- check every 5 seconds
+                        end
+                    end
+
+                    autoFallingStarsThread = nil
+                end)
+            else
+                if autoFallingStarsThread then
+                    pcall(task.cancel, autoFallingStarsThread)
+                    autoFallingStarsThread = nil
+                end
+            end
+        end,
+    })
+
+
+
+    
+
     SaveManager:SetLibrary(Library)
     Window:SelectTab(1)
     InterfaceManager:SetLibrary(Library)
