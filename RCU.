@@ -994,7 +994,7 @@ BuildUI = function()
 
     LunarForge:Toggle("CraftAll", {
         Title = "Forge All",
-        Description = "Automatically forges selected meteorite fragments.",
+        Description = "Automatically forges ALL selected meteorite fragments.",
         Default = false,
         Callback = function(enabled)
             isLunarForgeCraftAllEnabled = enabled
